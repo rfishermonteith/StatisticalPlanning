@@ -9,9 +9,11 @@ else
 validSample = false;
 while validSample == false;
 % Generate random sample on x
-sample = (x(end)-x(1))*rand+x(1);
+choice = randi(length(x));
+sample = x(choice);
+%sample = (x(end)-x(1))*rand+x(1);
 [~, closestPoint] = min(abs(x-sample));
-if p(closestPoint) > max(p)*rand
+if p(closestPoint) >= max(p)*rand
     validSample = true;
     point = x(closestPoint);
 end

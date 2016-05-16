@@ -14,8 +14,11 @@ probEnd = 0.05;
 x = linspace(0,1,n);
 p = ones(1,n)/n*(1-probEnd);
 %p = normpdf(x, 0.5, 0.3)/n*(1-probEnd);
+%p = p + 1./(5-x);
 width = x(2)-x(1);
 p(abs(x-pEnd)<tol) = p(abs(x-pEnd)<tol) + probEnd;
+% Normalise
+p = p/sum(p);
 
 % overload val2ind:
 val2ind = @(val, width) round(val*(n-1)+1);
@@ -28,7 +31,6 @@ if dispVis
     plot(x,p);
     ylim([0,1.1*max(p)])
     title('Sampling probabilities')
-    
 end
 
 pNode{1} = zeros(1,n);
@@ -41,34 +43,50 @@ if dispVis
 end
 
 % Run sim m times:
-m = 200;
+m = 600;
 EX = 0;
 
 % Precalculate upper and lower bounds:
 upperBoundA = zeros(1, length(x));
 lowerBoundA = zeros(1, length(x));
 for kk = 1:length(x)
-    lowerBoundA(kk) = val2ind(max(x(1),x(kk)-r), width);
-    upperBoundA(kk) = val2ind(min(x(kk)+r,x(end)), width);
+    lowerBoundA(kk) = val2ind(x(kk)-r, width);
+    upperBoundA(kk) = val2ind(x(kk)+r, width);
 end
+% Saturate
+lowerBoundA(lowerBoundA < 1) = 1;
+lowerBoundA(lowerBoundA > length(x)) = length(x);
+upperBoundA(upperBoundA < 1) = 1;
+upperBoundA(upperBoundA > length(x)) = length(x);
 
 upperBoundB = zeros(length(x));
 lowerBoundB = zeros(length(x));
 for kk = 1:length(x)
     for kkk = 1:kk
-        lowerBoundB(kk, kkk) = val2ind(max(x(1),x(kkk)-r), width);
-        upperBoundB(kk, kkk) = val2ind(min(x(max(kk-1,1))+r,x(end)), width);
+        lowerBoundB(kk, kkk) = val2ind(2*x(kkk)-x(kk)-r, width);
+        upperBoundB(kk, kkk) = val2ind(x(kk)+r, width)-1;
     end
 end
+% Saturate
+lowerBoundB(lowerBoundB < 1) = 1;
+lowerBoundB(lowerBoundB > length(x)) = length(x);
+upperBoundB(upperBoundB < 1) = 1;
+upperBoundB(upperBoundB > length(x)) = length(x);
 
 upperBoundC = zeros(1, length(x));
 lowerBoundC = zeros(1, length(x));
 for kk = 1:length(x)
     for kkk = kk:length(x)
-        lowerBoundC(kk, kkk) = val2ind(max(x(1),x(min(kk+1,length(x)))-r), width);
-        upperBoundC(kk, kkk) = val2ind(min(x(kkk)+r,x(end)), width);
+        lowerBoundC(kk, kkk) = val2ind(x(kk)-r, width)+1;
+        upperBoundC(kk, kkk) = val2ind(2*x(kkk)+x(kk)-r, width);
     end
 end
+% Saturate
+lowerBoundC(lowerBoundC < 1) = 1;
+lowerBoundC(lowerBoundC > length(x)) = length(x);
+upperBoundC(upperBoundC < 1) = 1;
+upperBoundC(upperBoundC > length(x)) = length(x);
+
 
 for k = 2:m
     % Calculate or(p_(i-1)(x-r:x+r))
@@ -77,7 +95,7 @@ for k = 2:m
         orA(kk) = distOr2(pNode{k-1}(lowerBoundA(kk):upperBoundA(kk))');
     end
     
-    % Calculate or(p(0:x)
+    % Calculate or(p(0:x-1)
     orB = zeros(1,length(x));
     for kk = 1:length(x)
         orB1 = zeros(1, length(x));
@@ -87,7 +105,7 @@ for k = 2:m
         orB(kk) = sum(orB1);
     end
     
-    % Calculate or(p(x:end)
+    % Calculate or(p(x+1:end)
     orC = zeros(1,length(x));
     for kk = 1:length(x)
         orC1 = zeros(1,length(x));
@@ -126,15 +144,10 @@ for k = 2:m
     %tempProb = distOr2([p.*orA; pLeft.*orB; pRight.*orC]);
     tempProb = sum([p.*orA; pLeft.*orB; pRight.*orC]);
     
-    %     for kk = 1:length(p)
-    %         tempProb(kk) = distOr2([p(kk).*orA(kk); pLeft(kk).*orB(kk); (pRight(kk)*(1 - distOr2(pRight(kk+1:end)'))).*orC(kk)]);
-    %     end
-    % Normalise
-    %tempProb = tempProb./sum(tempProb);
     pNode{k} = distOr2([tempProb;pNode{k-1}]);
 
     % Check that it sums to 1
-    if abs(sum(tempProb)-1)>tol
+    if abs(sum(tempProb)-1)>tol/1000
         warning(['tempProb does not sum to 1, instead, it sums to ', num2str(sum(tempProb))])
     end
     if dispVis
@@ -150,20 +163,11 @@ for k = 2:m
     end
     
     EX(k) = EX(k-1) + k*(pNode{k}(x==pEnd)-pNode{k-1}(x==pEnd));
-    %     for k2 = 1:k-1
-    %         probs(k2,:) = pNode{k2}(x==pEnd);
-    %     end
-    %     EX(k) = EX(k-1) + k*(pNode{k}(x==pEnd)*(1-prod(probs)));
-    
-    % Stop if prob at pEnd > 0.5
-    %     if pNode{k}(abs(x-pEnd)<tol)>0.5
-    %         disp(k)
-    %         break
-    %     end
     
 end
 
 figure; plot(EX);
+drawnow;
 toc
 
 %% Run a simulation of standard RRT to test the results

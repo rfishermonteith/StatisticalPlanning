@@ -2,7 +2,7 @@
 
 close all
 clear
-dispVis = 0;
+dispVis = 1;
 n = 101;
 r = 0.1;
 tol = 1/n;
@@ -13,7 +13,7 @@ probEnd = 0.05;
 
 x = linspace(0,1,n);
 p = ones(1,n)/n*(1-probEnd);
-%p = normpdf(x, 0.5, 0.3)/n*(1-probEnd);
+p = normpdf(x, 0.5, 0.3)/n*(1-probEnd);
 %p = p + 1./(5-x);
 width = x(2)-x(1);
 p(abs(x-pEnd)<tol) = p(abs(x-pEnd)<tol) + probEnd;
@@ -43,7 +43,7 @@ if dispVis
 end
 
 % Run sim m times:
-m = 600;
+m = 150;
 EX = 0;
 
 % Precalculate upper and lower bounds:
@@ -78,7 +78,7 @@ lowerBoundC = zeros(1, length(x));
 for kk = 1:length(x)
     for kkk = kk:length(x)
         lowerBoundC(kk, kkk) = val2ind(x(kk)-r, width)+1;
-        upperBoundC(kk, kkk) = val2ind(2*x(kkk)+x(kk)-r, width);
+        upperBoundC(kk, kkk) = val2ind(2*x(kkk)-x(kk)+r, width);
     end
 end
 % Saturate
@@ -144,15 +144,20 @@ for k = 2:m
     %tempProb = distOr2([p.*orA; pLeft.*orB; pRight.*orC]);
     tempProb = sum([p.*orA; pLeft.*orB; pRight.*orC]);
     
-    pNode{k} = distOr2([tempProb;pNode{k-1}]);
-
     % Check that it sums to 1
     if abs(sum(tempProb)-1)>tol/1000
         warning(['tempProb does not sum to 1, instead, it sums to ', num2str(sum(tempProb))])
     end
+    
+    % Normalise tempProb
+    %tempProb = tempProb./sum(tempProb);
+    
+    pNode{k} = distOr2([tempProb;pNode{k-1}]);
+
     if dispVis
         subplot(5,1,5)
         plot(x,tempProb);
+        title('Placed node')
     end
     
     if dispVis

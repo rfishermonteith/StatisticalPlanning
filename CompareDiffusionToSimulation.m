@@ -43,7 +43,7 @@ simEX = 0;
 
 figure;
 
-N = 201;
+N = 101;
 M = 100000;
 simNodes = zeros(M,N);
 simNodes(:,1) = repmat(pStart, M, 1);
@@ -106,9 +106,10 @@ for k = 2:N
     %% Run the step of the forward method
     
     movedDist = zeros(1, length(x));
-
+    thisMovedDist = zeros(length(x));
     % Loop through each index, and move it:
     for kk = 1:length(x)
+
         % Where should p[kk] move to?
         
         % Is there a node within distance r?
@@ -117,8 +118,8 @@ for k = 2:N
         upperBound = val2ind(x(kk)+r, width);
         if upperBound > length(x), upperBound = length(x); end
         pWithinR = distOr2(pNode{k-1}(lowerBound:upperBound));
-        
-        movedDist(kk) = movedDist(kk) + pWithinR*placedDist(kk);
+
+        thisMovedDist(kk,kk) = pWithinR*placedDist(kk);
         
         % Where is the nearest node (outside of r)?
         pOfBeingClosestNode = zeros(1, length(x)); % probability of this being the nearest node to kk
@@ -133,21 +134,25 @@ for k = 2:N
             upperBound = kk+kkk;
             if upperBound > length(x), pUpper = 0; else pUpper = pNode{k-1}(upperBound); end
             
-%             % DEBUG: scale pNode for pLower, so that the remaining
-%             % possible points sum to 1
-%             indicesToExclude = (kk-kkk:kk+kkk);
-%             tempSums = sum(allNodeDists(1:k-1,[1:kk-kkk,kk+kkk:end]),2);
-%             tempSums(tempSums == 0) = 1; % When this happens, the node from this row has already been used, so the only thigs which will be scaled will be zeros
-%             pTempDist = bsxfun(@rdivide, allNodeDists(1:k-1,:),tempSums);
-%             if size(pTempDist,1) ~= 1
-%                 pTempDist = distOr2(pTempDist);
-%             end
-%             if pLower ~= 0
-%                 pLower = pTempDist(lowerBound);
-%             end
-%             if pUpper ~= 0
-%                 pUpper = pTempDist(upperBound);
-%             end
+            % DEBUG: scale pNode for pLower, so that the remaining
+            % possible points sum to 1
+            indicesToExclude = (kk-kkk:kk+kkk);
+            tempSums = sum(allNodeDists(1:k-1,[1:kk-kkk,kk+kkk:end]),2);
+            tempSums(tempSums == 0) = 1; % When this happens, the node from this row has already been used, so the only thigs which will be scaled will be zeros
+            pTempDist = zeros(length(tempSums), size(allNodeDists,2));
+            for iRow = 1:length(tempSums)
+               pTempDist(iRow, :) = allNodeDists(iRow,:)./tempSums(iRow); 
+            end
+            
+            if size(pTempDist,1) ~= 1
+                pTempDist = distOr2(pTempDist);
+            end
+            if pLower ~= 0
+                pLower = pTempDist(lowerBound);
+            end
+            if pUpper ~= 0
+                pUpper = pTempDist(upperBound);
+            end
             
             chosenLower = 0;
             if pLower ~= 0 && lowerBound >= 1
@@ -165,14 +170,13 @@ for k = 2:N
                     pCumulative = p1 + (pLower/(pUpper+pLower))*p4;
                     pOfBeingClosestNode(lowerBound) = pCumulative*(1-pNodeFound);
                     chosenLower = pLower;
-                    %                     pOfBeingClosestNode(lowerBound) = (pLower/(pUpper+pLower))*(1-pNodeFound);
                 else
                     pOfBeingClosestNode(lowerBound) = pLower*(1-pNodeFound);
                 end
             end
             
             chosenUpper = 0;
-            if pUpper ~= 0 && upperBound <= length(x) % DEBUG
+            if pUpper ~= 0 && upperBound <= length(x)
                 chosenUpper = pUpper;
                 if pLower ~= 0
                     % Probability lower but not upper:
@@ -188,7 +192,7 @@ for k = 2:N
                     pOfBeingClosestNode(upperBound) = pCumulative*(1-pNodeFound);
                     chosenUpper = pUpper;
                 else
-                    pOfBeingClosestNode(upperBound) = pUpper*(1-pNodeFound);
+                    pOfBeingClosestNode(upperBound) = pUpper*(1-pNodeFound); 
                 end
             end
             
@@ -205,27 +209,26 @@ for k = 2:N
         
         for kkk = 1:length(x)
             if kkk <= kk-indR % Move node left
-                movedDist(kkk+indR-1) = movedDist(kkk+indR-1) + placedDist(kk)*pOfBeingClosestNode(kkk);
+                thisMovedDist(kk,kkk+indR-1) = placedDist(kk)*pOfBeingClosestNode(kkk);
             elseif kkk >= kk+indR % Move node right
-                movedDist(kkk-indR+1) = movedDist(kkk-indR+1) + placedDist(kk)*pOfBeingClosestNode(kkk);
+                thisMovedDist(kk,kkk-indR+1) = placedDist(kk)*pOfBeingClosestNode(kkk);
             else % Place node where it is (with whatever frequency there's a not within distance r
                 % Actually do nothing for now, this should be handle above
+                pause(0.0001)
             end
-            
-            
+
         end
         % Ensure that all of p(kk) has been placed
-        if abs(sum(movedDist) - sum(placedDist(1:kk))) > 10e-6
-            warning(['Not all of placedDist(',num2str(kk),') has been placed'])
+        if abs(sum(thisMovedDist(kk,:)) - placedDist(kk)) > 10e-6
+            warning([num2str(abs(sum(thisMovedDist(kk,:)) - placedDist(kk))), ' of placedDist(',num2str(kk),') has not been placed'])
         end
     end
+    
+    movedDist = sum(thisMovedDist);
     
     pNode{k} = distOr2([movedDist;pNode{k-1}]);
     pNode{k}(x==pEnd) = 0; % DEBUG!
     allNodeDists(k,:) = movedDist;
-    % scale: DEBUG
-    %scaleFactorThing = (1-length(x))/(sum(pNode{k})-length(x))
-    %pNode{k} = 1-(1-pNode{k}).*scaleFactorThing;
    
     
     EX2(k) = EX2(k-1) + k*(movedDist(x==pEnd))*runningProduct;
@@ -241,10 +244,11 @@ for k = 2:N
     mse = mean((movedDist-countsPlaced./sum(countsPlaced)).^2);
     title(['Probability of placing a node, with mse: ',num2str(mse)])
     
+    % Plot the new cumulative node positions
     subplot(2,1,2)
     hold on
     plot(x, sum(allNodeDists)*M, 'r')
     hold off
     drawnow;
-    % Plot the new cumulative node positions
+
 end

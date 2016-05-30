@@ -117,9 +117,10 @@ for k = 2:N
         if lowerBound < 1, lowerBound = 1; end
         upperBound = val2ind(x(kk)+r, width);
         if upperBound > length(x), upperBound = length(x); end
-        pWithinR = distOr2(pNode{k-1}(lowerBound:upperBound));
-
-        thisMovedDist(kk,kk) = pWithinR*placedDist(kk);
+        % DEBUG:
+%         pWithinR = distOr2(pNode{k-1}(lowerBound:upperBound));
+% 
+%         thisMovedDist(kk,kk) = pWithinR;
         
         % Where is the nearest node (outside of r)?
         pOfBeingClosestNode = zeros(1, length(x)); % probability of this being the nearest node to kk
@@ -199,7 +200,7 @@ for k = 2:N
             pNodeFound = distOr2([pNodeFound, pUpper, pLower]);
             
         end
-        if abs(sum(pOfBeingClosestNode)-1) > 1e-6
+        if abs(sum(pOfBeingClosestNode)-1) > 1e-9
             warning(['pOfBeingClosestNode sums to ',num2str(sum(pOfBeingClosestNode)), ', rather than 1'])
         end
         
@@ -209,22 +210,25 @@ for k = 2:N
         
         for kkk = 1:length(x)
             if kkk <= kk-indR % Move node left
-                thisMovedDist(kk,kkk+indR-1) = placedDist(kk)*pOfBeingClosestNode(kkk);
+                thisMovedDist(kk,kkk+indR-1) = pOfBeingClosestNode(kkk);
             elseif kkk >= kk+indR % Move node right
-                thisMovedDist(kk,kkk-indR+1) = placedDist(kk)*pOfBeingClosestNode(kkk);
+                thisMovedDist(kk,kkk-indR+1) = pOfBeingClosestNode(kkk);
             else % Place node where it is (with whatever frequency there's a not within distance r
                 % Actually do nothing for now, this should be handle above
+                % DEBUG: try account for it here:
+                thisMovedDist(kk,kk) = thisMovedDist(kk,kk) + pOfBeingClosestNode(kkk);
                 pause(0.0001)
             end
 
         end
+        aggregatedMovedDist(kk,:) = placedDist(kk)*thisMovedDist(kk,:);
         % Ensure that all of p(kk) has been placed
-        if abs(sum(thisMovedDist(kk,:)) - placedDist(kk)) > 10e-6
-            warning([num2str(abs(sum(thisMovedDist(kk,:)) - placedDist(kk))), ' of placedDist(',num2str(kk),') has not been placed'])
+        if abs(sum(aggregatedMovedDist(kk,:)) - placedDist(kk)) > 10e-6
+            warning([num2str(abs(sum(aggregatedMovedDist(kk,:)) - placedDist(kk))), ' of placedDist(',num2str(kk),') has not been placed'])
         end
     end
     
-    movedDist = sum(thisMovedDist);
+    movedDist = sum(aggregatedMovedDist);
     
     pNode{k} = distOr2([movedDist;pNode{k-1}]);
     pNode{k}(x==pEnd) = 0; % DEBUG!
